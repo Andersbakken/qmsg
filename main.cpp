@@ -1,33 +1,13 @@
 #include "qargumentparser.h"
 #include "qswitchargument.h"
+#include <QtGui>
 #include <limits.h>
-#include <QLabel>
-#include <QTextDocument>
-#include <QWidget>
-#include <QTimerEvent>
-#include <QMouseEvent>
-#include <QString>
-#include <QObject>
-#include <QRegExp>
-#include <QStringList>
-#include <QDateTime>
-#include <QFile>
-#include <QDir>
-#include <QTime>
-#include <QFrame>
-#include <QPalette>
-#include <QColorGroup>
-#include <QFont>
-#include <QRect>
-#include <QApplication>
-#include <QTimer>
-#include <QDesktopWidget>
 
 class Label : public QLabel
 {
 public:
     Label(QWidget *parent, Qt::WFlags f = 0)
-	: QLabel(parent, f | Qt::X11BypassWindowManagerHint), showingExtra(false), closeTimer(-1)
+	: QLabel(parent, f | Qt::X11BypassWindowManagerHint), showingExtra(false), showCountDownTimer(false), closeTimer(-1)
     {
     }
 
@@ -63,7 +43,24 @@ public:
 	    close();
 	}
     }
-    bool showingExtra;
+
+    void paintEvent(QPaintEvent *e)
+    {
+        QLabel::paintEvent(e);
+        if (showCountDownTimer) {
+            QPainter p(this);
+            p.setPen(Qt::white);
+            QFont font;
+            font.setPixelSize(15);
+            p.setFont(font);
+            enum { Margin = 5 };
+            p.drawText(rect().adjusted(Margin, Margin, -Margin, -Margin), Qt::AlignBottom|Qt::AlignRight,
+                       QString::number(QTime::currentTime().secsTo(closeTime)));
+        }
+    }
+
+    QTime closeTime;
+    bool showingExtra, showCountDownTimer;
     int closeTimer;
     QString normal, extra;
 };
@@ -74,11 +71,12 @@ class QMsgArgParser : public QObject, public QArgumentsParser
     Q_OBJECT
 public:
     QMsgArgParser(int argc, char** argv)
-	: QArgumentsParser(argc, argv), runProgram(true), html(false), wordWrap(true), sleep(0), wait(0)
+	: QArgumentsParser(argc, argv), runProgram(true), html(false), wordWrap(true),
+          showCountDownTimer(false), sleep(0), wait(0)
     {
 	x = y = w = h = INT_MAX;
     }
-    bool runProgram, html, wordWrap;
+    bool runProgram, html, wordWrap, showCountDownTimer;
     QString message, extra;
     int sleep;
     quint64 wait;
@@ -218,6 +216,8 @@ protected:
 	    html = true;
 	} else if (arg.is("--no-wordwrap")) {
 	    wordWrap = false;
+	} else if (arg.is("--show-countdown-timer")) {
+	    showCountDownTimer = true;
 	} else if (arg.is("--file")) {
 	    QFile f(arg.value());
 	    if (!f.open(QIODevice::ReadOnly)) {
@@ -244,7 +244,8 @@ protected:
 	addArgument(QSwitchArgument("--log|-l"), "Print the the logfile");
 	addArgument(QSwitchArgument("--extra|-e", "extra"), "Extra message to be printed if user clicks the label");
 	addArgument(QSwitchArgument("--no-wordwrap"), "Disable word wrap");
-    }
+	addArgument(QSwitchArgument("--show-countdown-timer"), "Show a countdown timer in the bottom right corner");
+}
 
     bool checkInvalidCombinations()
     {
@@ -271,7 +272,10 @@ protected:
 		setErrorString("No message to display");
 		return false;
 	    }
-	}
+	} else if (isArgumentSet("--show-countdown-timer") && !isArgumentSet("--sleep")) {
+            setErrorString("Can't show a countdown timer when there's nothing to count down to");
+            return false;
+        }
 	return true;
     }
 
@@ -316,6 +320,13 @@ public slots:
 	label->setMargin(20);
 	label->setFrameStyle(QFrame::Panel | QFrame::Raised);
 	label->setLineWidth(2);
+        if (showCountDownTimer) {
+            label->showCountDownTimer = true;
+            label->closeTime = QTime::currentTime().addSecs(sleep);
+            QTimer *timer = new QTimer(label);
+            connect(timer, SIGNAL(timeout()), label, SLOT(update()));
+            timer->start(1000);
+        }
 	QPalette pal = label->palette();
 	pal.setBrush(QPalette::Active, QPalette::Foreground, label->palette().background());
 	pal.setBrush(QPalette::Active, QPalette::Background, label->palette().foreground());
