@@ -94,10 +94,10 @@ QSwitchArgument &QSwitchArgument::operator=(const char * t)
 bool QSwitchArgument::operator==(const QSwitchArgument &arg) const
 {
     for (int i=0; i<(int)arg.types().count(); ++i) {
-	if (is(arg.types()[i]))
-	     return TRUE;
+        if (is(arg.types()[i]))
+            return true;
     }
-    return FALSE;
+    return false;
 }
 
 bool QSwitchArgument::operator!=(const QSwitchArgument &arg) const
@@ -123,9 +123,9 @@ bool QSwitchArgument::operator<(const char *arg) const
 bool QSwitchArgument::is(const QString& type) const
 {
     for (int i=0; i<(int)mTypes.count(); ++i) {
-	if (type == mTypes[i]) {
-	    return TRUE;
-	}
+        if (type == mTypes[i]) {
+            return true;
+        }
     }
-    return FALSE;
+    return false;
 }
